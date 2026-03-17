@@ -19,8 +19,8 @@ sent anywhere.
 ## Requirements
 
 - [Go 1.22+](https://go.dev/dl/)
-- Git installed and available in your PATH
-- macOS or Linux
+- [Git](https://git-scm.com/downloads) installed and available in your PATH
+- macOS, Linux, or Windows
 
 ---
 
@@ -34,25 +34,45 @@ cd devlog
 
 ### 2. Add Go binaries to your PATH
 
-If you have not done this already, add the following line to your shell config:
+Skip this step if you have already done it before.
 
-**For zsh (macOS default):**
+**macOS (zsh):**
 ```bash
 echo 'export PATH=$PATH:$HOME/go/bin' >> ~/.zshrc && source ~/.zshrc
 ```
 
-**For bash:**
+**macOS/Linux (bash):**
 ```bash
 echo 'export PATH=$PATH:$HOME/go/bin' >> ~/.bashrc && source ~/.bashrc
 ```
 
+**Windows (PowerShell — run once):**
+```powershell
+[Environment]::SetEnvironmentVariable("Path", $env:Path + ";$env:USERPROFILE\go\bin", [EnvironmentVariableTarget]::User)
+```
+Then restart your terminal for the change to take effect.
+
 ### 3. Install the binary
+
+**macOS / Linux:**
 ```bash
 go install .
 ```
 
+**Windows (PowerShell):**
+```powershell
+go install .
+```
+
 ### 4. Verify the installation
+
+**macOS / Linux:**
 ```bash
+devlog --help
+```
+
+**Windows (PowerShell):**
+```powershell
 devlog --help
 ```
 
@@ -161,15 +181,28 @@ devlog clear --all
 
 All data is stored **locally on your machine**. Nothing is ever sent online.
 
-| File | Path | Contents |
-|---|---|---|
-| Notes | `~/.devlog/notes.json` | Your saved notes |
-| Blockers | `~/.devlog/blockers.json` | Your saved blockers |
+| Platform | Path |
+|---|---|
+| macOS / Linux | `~/.devlog/` |
+| Windows | `C:\Users\yourname\.devlog\` |
+
+| File | Contents |
+|---|---|
+| `notes.json` | Your saved notes |
+| `blockers.json` | Your saved blockers |
 
 To inspect your stored data at any time:
+
+**macOS / Linux:**
 ```bash
 cat ~/.devlog/notes.json
 cat ~/.devlog/blockers.json
+```
+
+**Windows (PowerShell):**
+```powershell
+type $env:USERPROFILE\.devlog\notes.json
+type $env:USERPROFILE\.devlog\blockers.json
 ```
 
 ---
@@ -206,9 +239,15 @@ devlog/
 ---
 
 ## Updating devlog
+
+**macOS / Linux:**
 ```bash
-git pull
-go install .
+git pull && go install .
+```
+
+**Windows (PowerShell):**
+```powershell
+git pull; go install .
 ```
 
 ---
