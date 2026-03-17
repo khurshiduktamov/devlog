@@ -27,6 +27,15 @@ go.work.sum
 # env file
 .env
 
-# Editor/IDE
-# .idea/
-# .vscode/
+# Compiled binary
+devlog
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Local devlog data (personal, never commit)
+.devlog/
