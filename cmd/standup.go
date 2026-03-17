@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/khurshiduktamov/devlog/internal/activity"
+	"github.com/khurshiduktamov/devlog/internal/blockers"
 	"github.com/khurshiduktamov/devlog/internal/git"
 	"github.com/khurshiduktamov/devlog/internal/notes"
 	"github.com/khurshiduktamov/devlog/internal/report"
@@ -33,6 +34,12 @@ func runStandup(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load notes: %w", err)
 	}
 
+	// Fetch active blockers from the last 24 hours.
+	activeBlockers, err := blockers.GetActiveBlockers()
+	if err != nil {
+		return fmt.Errorf("failed to load blockers: %w", err)
+	}
+
 	// Convert commits to activities.
 	activities := activity.FromCommits(commits)
 
@@ -46,7 +53,7 @@ func runStandup(cmd *cobra.Command, args []string) error {
 	}
 
 	// Generate and print the standup report.
-	fmt.Print(report.GenerateStandup(activities))
+	fmt.Print(report.GenerateStandup(activities, activeBlockers))
 
 	return nil
 }
