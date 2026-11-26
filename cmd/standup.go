@@ -17,13 +17,19 @@ var standupCmd = &cobra.Command{
 	RunE:  runStandup,
 }
 
+var standupAuthor authorFlags
+
 func init() {
+	standupAuthor.register(standupCmd)
 	rootCmd.AddCommand(standupCmd)
 }
 
 func runStandup(cmd *cobra.Command, args []string) error {
 	// Fetch git commits from the last 48 hours.
-	commits, err := git.GetCommitsSince("48 hours ago")
+	opts := git.Options{Since: "48 hours ago"}
+	standupAuthor.apply(&opts)
+
+	commits, err := git.GetCommits(opts)
 	if err != nil {
 		return fmt.Errorf("failed to fetch commits: %w", err)
 	}

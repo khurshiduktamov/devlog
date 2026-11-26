@@ -14,12 +14,18 @@ var todayCmd = &cobra.Command{
 	RunE:  runToday,
 }
 
+var todayAuthor authorFlags
+
 func init() {
+	todayAuthor.register(todayCmd)
 	rootCmd.AddCommand(todayCmd)
 }
 
 func runToday(cmd *cobra.Command, args []string) error {
-	commits, err := git.GetCommitsSince("24 hours ago")
+	opts := git.Options{Since: "24 hours ago"}
+	todayAuthor.apply(&opts)
+
+	commits, err := git.GetCommits(opts)
 	if err != nil {
 		return fmt.Errorf("failed to fetch commits: %w", err)
 	}
