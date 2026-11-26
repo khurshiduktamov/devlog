@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // newRepo creates a throwaway git repository and returns its path.
@@ -65,7 +66,7 @@ func TestAuthorFilterExact(t *testing.T) {
 		t.Fatalf("CurrentUserEmail = %q", got)
 	}
 
-	cs, err := GetCommits(Options{Dir: dir, Since: "1 hour ago", Author: "me@example.com", AuthorExact: true})
+	cs, err := GetCommits(Options{Dir: dir, Since: time.Now().Add(-time.Hour), Author: "me@example.com", AuthorExact: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +74,7 @@ func TestAuthorFilterExact(t *testing.T) {
 		t.Fatalf("exact author filter: got %v, want [mine]", got)
 	}
 
-	all, err := GetCommits(Options{Dir: dir, Since: "1 hour ago"})
+	all, err := GetCommits(Options{Dir: dir, Since: time.Now().Add(-time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +105,7 @@ func TestMergeCommitsExcluded(t *testing.T) {
 	commitAs(t, dir, "Me", "me@example.com", "main work")
 	run(t, dir, "merge", "-q", "--no-ff", "-m", "Merge branch 'feature'", "feature")
 
-	cs, err := GetCommits(Options{Dir: dir, Since: "1 hour ago"})
+	cs, err := GetCommits(Options{Dir: dir, Since: time.Now().Add(-time.Hour)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,5 +116,25 @@ func TestMergeCommitsExcluded(t *testing.T) {
 	}
 	if len(cs) != 3 {
 		t.Fatalf("got %v, want 3 non-merge commits", messages(cs))
+	}
+}
+
+func TestSinceExcludesOlderCommits(t *testing.T) {
+	dir := newRepo(t)
+	old := time.Now().Add(-72 * time.Hour).Format(time.RFC3339)
+	cmd := exec.Command("git", "commit", "-q", "--allow-empty", "-m", "old")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_AUTHOR_DATE="+old, "GIT_COMMITTER_DATE="+old)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("commit: %v\n%s", err, out)
+	}
+	commitAs(t, dir, "Me", "me@example.com", "new")
+
+	cs, err := GetCommits(Options{Dir: dir, Since: time.Now().Add(-48 * time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := messages(cs); len(got) != 1 || got[0] != "new" {
+		t.Fatalf("got %v, want [new]", got)
 	}
 }

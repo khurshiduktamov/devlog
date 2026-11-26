@@ -2,12 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/khurshiduktamov/devlog/internal/activity"
 	"github.com/khurshiduktamov/devlog/internal/blockers"
 	"github.com/khurshiduktamov/devlog/internal/git"
 	"github.com/khurshiduktamov/devlog/internal/notes"
 	"github.com/khurshiduktamov/devlog/internal/report"
+	"github.com/khurshiduktamov/devlog/internal/workday"
 	"github.com/spf13/cobra"
 )
 
@@ -25,8 +27,11 @@ func init() {
 }
 
 func runStandup(cmd *cobra.Command, args []string) error {
-	// Fetch git commits from the last 48 hours.
-	opts := git.Options{Since: "48 hours ago"}
+	// Cover everything since the start of the previous workday, so a
+	// Monday standup includes Friday.
+	since := workday.PreviousStart(time.Now())
+
+	opts := git.Options{Since: since}
 	standupAuthor.apply(&opts)
 
 	commits, err := git.GetCommits(opts)
@@ -34,8 +39,7 @@ func runStandup(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to fetch commits: %w", err)
 	}
 
-	// Fetch saved notes from the last 48 hours.
-	savedNotes, err := notes.GetNotesSince("48 hours ago")
+	savedNotes, err := notes.GetNotesSince(since)
 	if err != nil {
 		return fmt.Errorf("failed to load notes: %w", err)
 	}

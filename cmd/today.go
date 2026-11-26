@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/khurshiduktamov/devlog/internal/activity"
 	"github.com/khurshiduktamov/devlog/internal/git"
@@ -22,7 +23,7 @@ func init() {
 }
 
 func runToday(cmd *cobra.Command, args []string) error {
-	opts := git.Options{Since: "24 hours ago"}
+	opts := git.Options{Since: time.Now().Add(-24 * time.Hour)}
 	todayAuthor.apply(&opts)
 
 	commits, err := git.GetCommits(opts)

@@ -19,8 +19,8 @@ type Options struct {
 	// Dir is the repository to read; empty means the current directory.
 	Dir string
 
-	// Since is a git date expression, e.g. "24 hours ago".
-	Since string
+	// Since is the earliest commit time to include.
+	Since time.Time
 
 	// Author limits commits to a single author. When AuthorExact is true it
 	// must equal the author's email; otherwise it is passed to
@@ -47,7 +47,7 @@ func CurrentUserEmail(dir string) string {
 func GetCommits(opts Options) ([]Commit, error) {
 	args := []string{
 		"log",
-		"--since=" + opts.Since,
+		"--since=" + opts.Since.Format(time.RFC3339),
 		"--no-merges", // "Merge branch 'main'..." is noise in a standup
 		"--pretty=format:%s%x09%aI",
 	}
