@@ -94,3 +94,26 @@ func TestParseLog(t *testing.T) {
 		t.Fatalf("bad second commit: %+v", cs[1])
 	}
 }
+
+func TestMergeCommitsExcluded(t *testing.T) {
+	dir := newRepo(t)
+	commitAs(t, dir, "Me", "me@example.com", "base")
+	run(t, dir, "checkout", "-q", "-b", "feature")
+	commitAs(t, dir, "Me", "me@example.com", "feature work")
+	run(t, dir, "checkout", "-q", "main")
+	commitAs(t, dir, "Me", "me@example.com", "main work")
+	run(t, dir, "merge", "-q", "--no-ff", "-m", "Merge branch 'feature'", "feature")
+
+	cs, err := GetCommits(Options{Dir: dir, Since: "1 hour ago"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range messages(cs) {
+		if m == "Merge branch 'feature'" {
+			t.Fatalf("merge commit included: %v", messages(cs))
+		}
+	}
+	if len(cs) != 3 {
+		t.Fatalf("got %v, want 3 non-merge commits", messages(cs))
+	}
+}

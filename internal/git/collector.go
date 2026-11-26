@@ -48,6 +48,7 @@ func GetCommits(opts Options) ([]Commit, error) {
 	args := []string{
 		"log",
 		"--since=" + opts.Since,
+		"--no-merges", // "Merge branch 'main'..." is noise in a standup
 		"--pretty=format:%s%x09%aI",
 	}
 	if opts.Author != "" {
