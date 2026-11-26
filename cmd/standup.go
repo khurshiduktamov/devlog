@@ -9,6 +9,7 @@ import (
 
 	"github.com/khurshiduktamov/devlog/internal/activity"
 	"github.com/khurshiduktamov/devlog/internal/blockers"
+	"github.com/khurshiduktamov/devlog/internal/clipboard"
 	"github.com/khurshiduktamov/devlog/internal/git"
 	"github.com/khurshiduktamov/devlog/internal/notes"
 	"github.com/khurshiduktamov/devlog/internal/plans"
@@ -26,12 +27,15 @@ var standupCmd = &cobra.Command{
 var (
 	standupAuthor authorFlags
 	standupFormat string
+	standupCopy   bool
 )
 
 func init() {
 	standupAuthor.register(standupCmd)
 	standupCmd.Flags().StringVarP(&standupFormat, "format", "f", "text",
 		"output format: "+strings.Join(report.Formats, ", "))
+	standupCmd.Flags().BoolVarP(&standupCopy, "copy", "c", false,
+		"also copy the report to the clipboard")
 	rootCmd.AddCommand(standupCmd)
 }
 
@@ -85,6 +89,13 @@ func runStandup(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	fmt.Print(out)
+
+	if standupCopy {
+		if err := clipboard.Copy(out); err != nil {
+			return fmt.Errorf("report printed but not copied: %w", err)
+		}
+		fmt.Fprintln(os.Stderr, "\n✓ Copied to clipboard.")
+	}
 
 	return nil
 }
