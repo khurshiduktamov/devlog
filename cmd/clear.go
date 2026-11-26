@@ -2,9 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 
+	"github.com/khurshiduktamov/devlog/internal/blockers"
+	"github.com/khurshiduktamov/devlog/internal/notes"
+	"github.com/khurshiduktamov/devlog/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -39,21 +40,14 @@ func runClear(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("specify at least one flag: --notes, --blockers, or --all")
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("could not resolve home directory: %w", err)
-	}
-
-	devlogDir := filepath.Join(home, ".devlog")
-
 	if clearAll || clearNotes {
-		if err := clearFile(filepath.Join(devlogDir, "notes.json"), "notes"); err != nil {
+		if err := clearFile(notes.FileName, "notes"); err != nil {
 			return err
 		}
 	}
 
 	if clearAll || clearBlockers {
-		if err := clearFile(filepath.Join(devlogDir, "blockers.json"), "blockers"); err != nil {
+		if err := clearFile(blockers.FileName, "blockers"); err != nil {
 			return err
 		}
 	}
@@ -61,15 +55,19 @@ func runClear(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// clearFile writes an empty JSON array to the given file path.
-func clearFile(path, label string) error {
+// clearFile replaces the given data file with an empty JSON array.
+func clearFile(name, label string) error {
+	exists, err := store.Exists(name)
+	if err != nil {
+		return err
+	}
 	// If file does not exist yet, nothing to clear.
-	if _, err := os.Stat(path); os.IsNotExist(err) {
+	if !exists {
 		fmt.Printf("No %s to clear.\n", label)
 		return nil
 	}
 
-	if err := os.WriteFile(path, []byte("[]\n"), 0644); err != nil {
+	if err := store.Save(name, []struct{}{}); err != nil {
 		return fmt.Errorf("failed to clear %s: %w", label, err)
 	}
 

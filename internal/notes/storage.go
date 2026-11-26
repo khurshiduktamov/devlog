@@ -1,14 +1,16 @@
 package notes
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/khurshiduktamov/devlog/internal/store"
 )
+
+// FileName is the data file notes are stored in, inside ~/.devlog.
+const FileName = "notes.json"
 
 // Note represents a single manually entered developer note.
 type Note struct {
@@ -16,74 +18,13 @@ type Note struct {
 	Time    time.Time `json:"time"`
 }
 
-// devlogDir returns the path to the ~/.devlog directory.
-func devlogDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("could not resolve home directory: %w", err)
-	}
-	return filepath.Join(home, ".devlog"), nil
-}
-
-// notesFilePath returns the full path to ~/.devlog/notes.json.
-func notesFilePath() (string, error) {
-	dir, err := devlogDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "notes.json"), nil
-}
-
-// ensureDevlogDir creates ~/.devlog if it does not exist.
-func ensureDevlogDir() error {
-	dir, err := devlogDir()
-	if err != nil {
-		return err
-	}
-	return os.MkdirAll(dir, 0755)
-}
-
-// loadAll reads all notes from ~/.devlog/notes.json.
-// Returns an empty slice if the file does not exist yet.
+// loadAll reads all notes. Returns an empty slice if none are saved yet.
 func loadAll() ([]Note, error) {
-	path, err := notesFilePath()
-	if err != nil {
+	notes := []Note{}
+	if err := store.Load(FileName, &notes); err != nil {
 		return nil, err
 	}
-
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return []Note{}, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to read notes file: %w", err)
-	}
-
-	var notes []Note
-	if err := json.Unmarshal(data, &notes); err != nil {
-		return nil, fmt.Errorf("failed to parse notes file: %w", err)
-	}
-
 	return notes, nil
-}
-
-// saveAll writes the full notes slice to ~/.devlog/notes.json.
-func saveAll(notes []Note) error {
-	if err := ensureDevlogDir(); err != nil {
-		return err
-	}
-
-	path, err := notesFilePath()
-	if err != nil {
-		return err
-	}
-
-	data, err := json.MarshalIndent(notes, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to serialize notes: %w", err)
-	}
-
-	return os.WriteFile(path, data, 0644)
 }
 
 // AddNote appends a new note with the current timestamp to notes.json.
@@ -98,7 +39,7 @@ func AddNote(message string) error {
 		Time:    time.Now(),
 	})
 
-	return saveAll(notes)
+	return store.Save(FileName, notes)
 }
 
 // parseDuration converts a human-readable duration string like
