@@ -100,6 +100,79 @@ Available Commands:
 
 ---
 
+## Command Reference
+
+A quick overview of everything devlog can do. Examples for each command are in
+[Usage](#usage) below.
+
+### Commands
+
+| Command | What it does |
+|---|---|
+| `devlog today` | Show your commits from the last 24 hours |
+| `devlog note <message>` | Save a note about something you did |
+| `devlog plan <message>` | Save something you plan to work on today |
+| `devlog plan` | List today's plans |
+| `devlog blocker <message>` | Save a blocker |
+| `devlog blocker list` | List open blockers with their numbers (same as `devlog blocker`) |
+| `devlog blocker resolve <number>...` | Mark one or more blockers as resolved |
+| `devlog standup` | Print your standup report |
+| `devlog clear` | Delete saved notes, plans and/or blockers |
+| `devlog help <command>` | Show help for any command |
+
+Quotes around messages are optional: `devlog note fixed the login bug` works.
+
+### Options
+
+**`devlog standup`**
+
+| Option | Short | What it does |
+|---|---|---|
+| `--format <name>` | `-f` | Output format: `text` (default), `markdown`, `slack` or `json` |
+| `--copy` | `-c` | Also copy the report to your clipboard |
+| `--author <pattern>` | | Show commits by someone else (name or email) |
+| `--all-authors` | | Show commits from everyone, not just you |
+
+**`devlog today`**
+
+| Option | What it does |
+|---|---|
+| `--author <pattern>` | Show commits by someone else (name or email) |
+| `--all-authors` | Show commits from everyone, not just you |
+
+**`devlog plan`**
+
+| Option | Short | What it does |
+|---|---|---|
+| `--tomorrow` | `-t` | Plan for (or list) the next workday instead of today. On Friday, that's Monday |
+
+**`devlog blocker resolve`**
+
+| Alias | Example |
+|---|---|
+| `done`, `rm` | `devlog blocker done 2` |
+
+`devlog blocker list` can also be shortened to `devlog blocker ls`.
+
+**`devlog clear`** (pick at least one)
+
+| Option | What it deletes |
+|---|---|
+| `--notes` | All notes |
+| `--plans` | All plans |
+| `--blockers` | All blockers, open and resolved |
+| `--all` | Everything above |
+
+### How the standup report is built
+
+| Section | Contents |
+|---|---|
+| **Yesterday** | Your commits and notes since the start of the previous workday (on Monday, from Friday) |
+| **Today** | Your plans for today |
+| **Blockers** | Every blocker you haven't resolved |
+
+---
+
 ## Usage
 
 ### Show today's commits
