@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/khurshiduktamov/devlog/internal/activity"
@@ -22,10 +23,15 @@ var standupCmd = &cobra.Command{
 	RunE:  runStandup,
 }
 
-var standupAuthor authorFlags
+var (
+	standupAuthor authorFlags
+	standupFormat string
+)
 
 func init() {
 	standupAuthor.register(standupCmd)
+	standupCmd.Flags().StringVarP(&standupFormat, "format", "f", "text",
+		"output format: "+strings.Join(report.Formats, ", "))
 	rootCmd.AddCommand(standupCmd)
 }
 
@@ -74,8 +80,11 @@ func runStandup(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	// Generate and print the standup report.
-	fmt.Print(report.GenerateStandup(activities, todayPlans, activeBlockers))
+	out, err := report.Render(report.Build(activities, todayPlans, activeBlockers), standupFormat)
+	if err != nil {
+		return err
+	}
+	fmt.Print(out)
 
 	return nil
 }
