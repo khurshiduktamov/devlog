@@ -1,6 +1,11 @@
 package blockers
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	"github.com/khurshiduktamov/devlog/internal/store"
+)
 
 func useTempHome(t *testing.T) {
 	t.Helper()
@@ -58,5 +63,21 @@ func TestResolveWithNoBlockers(t *testing.T) {
 	useTempHome(t)
 	if _, err := Resolve([]int{1}); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestOpenBlockersDoNotExpire(t *testing.T) {
+	useTempHome(t)
+	now := time.Now()
+	store.Save(FileName, []Blocker{
+		{Message: "old open", Time: now.Add(-10 * 24 * time.Hour), Status: StatusOpen},
+		{Message: "old resolved", Time: now.Add(-10 * 24 * time.Hour), Status: StatusResolved},
+		{Message: "legacy old", Time: now.Add(-48 * time.Hour)},
+		{Message: "legacy recent", Time: now.Add(-time.Hour)},
+	})
+
+	got := activeMessages(t)
+	if len(got) != 2 || got[0] != "old open" || got[1] != "legacy recent" {
+		t.Fatalf("active = %v, want [old open, legacy recent]", got)
 	}
 }

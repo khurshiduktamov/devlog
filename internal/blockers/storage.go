@@ -26,11 +26,18 @@ type Blocker struct {
 }
 
 // isActive reports whether b should appear in standups and `blocker list`.
+// Open blockers stay active until resolved. Blockers saved by older
+// devlog versions have no status; they keep the old 24-hour expiry so that
+// upgrading doesn't resurrect every blocker ever logged.
 func isActive(b Blocker, now time.Time) bool {
-	if b.Status == StatusResolved {
+	switch b.Status {
+	case StatusOpen:
+		return true
+	case StatusResolved:
 		return false
+	default:
+		return b.Time.After(now.Add(-24 * time.Hour))
 	}
-	return b.Time.After(now.Add(-24 * time.Hour))
 }
 
 // loadAll reads all blockers. Returns an empty slice if none are saved yet.
