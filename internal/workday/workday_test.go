@@ -38,3 +38,14 @@ func TestPreviousStartAcrossMonth(t *testing.T) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }
+
+func TestNext(t *testing.T) {
+	// November 2026: 20 = Fri, 23 = Mon, 24 = Tue.
+	cases := map[int]int{24: 25, 20: 23, 21: 23, 22: 23, 23: 24}
+	for from, want := range cases {
+		got := Next(time.Date(2026, 11, from, 17, 0, 0, 0, time.UTC))
+		if got.Day() != want || got.Hour() != 0 {
+			t.Errorf("Next(Nov %d) = %v, want Nov %d 00:00", from, got, want)
+		}
+	}
+}

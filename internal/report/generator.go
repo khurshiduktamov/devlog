@@ -6,6 +6,7 @@ import (
 
 	"github.com/khurshiduktamov/devlog/internal/activity"
 	"github.com/khurshiduktamov/devlog/internal/blockers"
+	"github.com/khurshiduktamov/devlog/internal/plans"
 )
 
 // StandupReport holds the three sections of a daily standup.
@@ -17,8 +18,8 @@ type StandupReport struct {
 
 // GenerateStandup splits activities into Yesterday and Today buckets
 // based on whether their timestamp falls on the current calendar day,
-// and includes any active blockers in the report.
-func GenerateStandup(activities []activity.Activity, activeBlockers []blockers.Blocker) string {
+// adds today's plans to Today, and includes any active blockers.
+func GenerateStandup(activities []activity.Activity, todayPlans []plans.Plan, activeBlockers []blockers.Blocker) string {
 	report := StandupReport{}
 
 	today := time.Now().Format("2006-01-02")
@@ -30,6 +31,10 @@ func GenerateStandup(activities []activity.Activity, activeBlockers []blockers.B
 		} else {
 			report.Yesterday = append(report.Yesterday, a.Message)
 		}
+	}
+
+	for _, p := range todayPlans {
+		report.Today = append(report.Today, p.Message)
 	}
 
 	for _, b := range activeBlockers {
