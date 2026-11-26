@@ -1,6 +1,7 @@
 package git
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -13,27 +14,100 @@ type Commit struct {
 	Time    time.Time
 }
 
-// GetCommitsSince returns commits from the current git repo
-// since the given duration. Example: "24 hours ago", "48 hours ago".
-// Format: <subject><TAB><ISO8601 date>
-func GetCommitsSince(duration string) ([]Commit, error) {
-	cmd := exec.Command(
-		"git", "log",
-		"--since="+duration,
-		"--pretty=format:%s%x09%aI",
-	)
+// ErrNotRepository is returned when the directory is not inside a git
+// work tree.
+var ErrNotRepository = errors.New("not inside a git repository")
 
+// ErrGitNotInstalled is returned when the git executable can't be found.
+var ErrGitNotInstalled = errors.New("git is not installed or not in PATH")
+
+// Options controls which commits GetCommits returns.
+type Options struct {
+	// Dir is the repository to read; empty means the current directory.
+	Dir string
+
+	// Since is the earliest commit time to include.
+	Since time.Time
+
+	// Author limits commits to a single author. When AuthorExact is true it
+	// must equal the author's email; otherwise it is passed to
+	// `git log --author` as a pattern matched against "Name <email>".
+	// Empty means all authors.
+	Author      string
+	AuthorExact bool
+}
+
+// CurrentUserEmail returns the user.email configured for the repo in dir
+// (falling back to the global config), or "" if none is set.
+// An empty dir means the current directory.
+func CurrentUserEmail(dir string) string {
+	cmd := exec.Command("git", "config", "user.email")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// CheckRepo reports ErrGitNotInstalled or ErrNotRepository if git can't
+// be used in dir.
+func CheckRepo(dir string) error {
+	if _, err := exec.LookPath("git"); err != nil {
+		return ErrGitNotInstalled
+	}
+	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil || strings.TrimSpace(string(out)) != "true" {
+		return ErrNotRepository
+	}
+	return nil
+}
+
+// GetCommits returns commits from the git repo in opts.Dir matching opts.
+// It returns ErrNotRepository or ErrGitNotInstalled when git can't be used
+// there, so callers can degrade gracefully.
+func GetCommits(opts Options) ([]Commit, error) {
+	if err := CheckRepo(opts.Dir); err != nil {
+		return nil, err
+	}
+
+	args := []string{
+		"log",
+		"--since=" + opts.Since.Format(time.RFC3339),
+		"--no-merges", // "Merge branch 'main'..." is noise in a standup
+		"--pretty=format:%s%x09%aI",
+	}
+	if opts.Author != "" {
+		if opts.AuthorExact {
+			// Wrapping in <> matches the whole email, so "al@x.com"
+			// doesn't also match "sal@x.com".
+			args = append(args, "--fixed-strings", "--author=<"+opts.Author+">")
+		} else {
+			args = append(args, "--author="+opts.Author)
+		}
+	}
+
+	cmd := exec.Command("git", args...)
+	cmd.Dir = opts.Dir
 	output, err := cmd.Output()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("git error: %s", string(exitErr.Stderr))
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return nil, fmt.Errorf("git error: %s", strings.TrimSpace(string(exitErr.Stderr)))
 		}
 		return nil, err
 	}
 
-	raw := strings.TrimSpace(string(output))
+	return parseLog(string(output)), nil
+}
+
+// parseLog parses `git log --pretty=format:%s%x09%aI` output.
+func parseLog(output string) []Commit {
+	raw := strings.TrimSpace(output)
 	if raw == "" {
-		return []Commit{}, nil
+		return []Commit{}
 	}
 
 	lines := strings.Split(raw, "\n")
@@ -48,14 +122,11 @@ func GetCommitsSince(duration string) ([]Commit, error) {
 		parts := strings.SplitN(line, "\t", 2)
 		message := parts[0]
 
-		var commitTime time.Time
+		commitTime := time.Now()
 		if len(parts) == 2 {
-			commitTime, err = time.Parse(time.RFC3339, strings.TrimSpace(parts[1]))
-			if err != nil {
-				commitTime = time.Now()
+			if t, err := time.Parse(time.RFC3339, strings.TrimSpace(parts[1])); err == nil {
+				commitTime = t
 			}
-		} else {
-			commitTime = time.Now()
 		}
 
 		commits = append(commits, Commit{
@@ -64,5 +135,5 @@ func GetCommitsSince(duration string) ([]Commit, error) {
 		})
 	}
 
-	return commits, nil
+	return commits
 }

@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"time"
 
 	"github.com/khurshiduktamov/devlog/internal/activity"
 	"github.com/khurshiduktamov/devlog/internal/git"
@@ -14,12 +16,21 @@ var todayCmd = &cobra.Command{
 	RunE:  runToday,
 }
 
+var todayAuthor authorFlags
+
 func init() {
+	todayAuthor.register(todayCmd)
 	rootCmd.AddCommand(todayCmd)
 }
 
 func runToday(cmd *cobra.Command, args []string) error {
-	commits, err := git.GetCommitsSince("24 hours ago")
+	opts := git.Options{Since: time.Now().Add(-24 * time.Hour)}
+	todayAuthor.apply(&opts)
+
+	commits, err := git.GetCommits(opts)
+	if errors.Is(err, git.ErrNotRepository) {
+		return fmt.Errorf("%w — run devlog today from inside a project folder", err)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to fetch commits: %w", err)
 	}

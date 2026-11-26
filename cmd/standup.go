@@ -1,13 +1,20 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/khurshiduktamov/devlog/internal/activity"
 	"github.com/khurshiduktamov/devlog/internal/blockers"
+	"github.com/khurshiduktamov/devlog/internal/clipboard"
 	"github.com/khurshiduktamov/devlog/internal/git"
 	"github.com/khurshiduktamov/devlog/internal/notes"
+	"github.com/khurshiduktamov/devlog/internal/plans"
 	"github.com/khurshiduktamov/devlog/internal/report"
+	"github.com/khurshiduktamov/devlog/internal/workday"
 	"github.com/spf13/cobra"
 )
 
@@ -17,24 +24,49 @@ var standupCmd = &cobra.Command{
 	RunE:  runStandup,
 }
 
+var (
+	standupAuthor authorFlags
+	standupFormat string
+	standupCopy   bool
+)
+
 func init() {
+	standupAuthor.register(standupCmd)
+	standupCmd.Flags().StringVarP(&standupFormat, "format", "f", "text",
+		"output format: "+strings.Join(report.Formats, ", "))
+	standupCmd.Flags().BoolVarP(&standupCopy, "copy", "c", false,
+		"also copy the report to the clipboard")
 	rootCmd.AddCommand(standupCmd)
 }
 
 func runStandup(cmd *cobra.Command, args []string) error {
-	// Fetch git commits from the last 48 hours.
-	commits, err := git.GetCommitsSince("48 hours ago")
-	if err != nil {
+	// Cover everything since the start of the previous workday, so a
+	// Monday standup includes Friday.
+	since := workday.PreviousStart(time.Now())
+
+	opts := git.Options{Since: since}
+	standupAuthor.apply(&opts)
+
+	commits, err := git.GetCommits(opts)
+	switch {
+	case errors.Is(err, git.ErrNotRepository), errors.Is(err, git.ErrGitNotInstalled):
+		// Notes and blockers are still useful without commits.
+		fmt.Fprintf(os.Stderr, "Note: %v — showing notes and blockers only.\n\n", err)
+		commits = nil
+	case err != nil:
 		return fmt.Errorf("failed to fetch commits: %w", err)
 	}
 
-	// Fetch saved notes from the last 48 hours.
-	savedNotes, err := notes.GetNotesSince("48 hours ago")
+	savedNotes, err := notes.GetNotesSince(since)
 	if err != nil {
 		return fmt.Errorf("failed to load notes: %w", err)
 	}
 
-	// Fetch active blockers from the last 24 hours.
+	todayPlans, err := plans.GetPlansFor(time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to load plans: %w", err)
+	}
+
 	activeBlockers, err := blockers.GetActiveBlockers()
 	if err != nil {
 		return fmt.Errorf("failed to load blockers: %w", err)
@@ -52,8 +84,18 @@ func runStandup(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	// Generate and print the standup report.
-	fmt.Print(report.GenerateStandup(activities, activeBlockers))
+	out, err := report.Render(report.Build(activities, todayPlans, activeBlockers), standupFormat)
+	if err != nil {
+		return err
+	}
+	fmt.Print(out)
+
+	if standupCopy {
+		if err := clipboard.Copy(out); err != nil {
+			return fmt.Errorf("report printed but not copied: %w", err)
+		}
+		fmt.Fprintln(os.Stderr, "\n✓ Copied to clipboard.")
+	}
 
 	return nil
 }

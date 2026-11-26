@@ -1,90 +1,55 @@
 package blockers
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
+	"sort"
 	"time"
+
+	"github.com/khurshiduktamov/devlog/internal/store"
+)
+
+// FileName is the data file blockers are stored in, inside ~/.devlog.
+const FileName = "blockers.json"
+
+// Blocker statuses.
+const (
+	StatusOpen     = "open"
+	StatusResolved = "resolved"
 )
 
 // Blocker represents a single impediment noted by the developer.
 type Blocker struct {
-	Message string    `json:"message"`
-	Time    time.Time `json:"time"`
+	Message    string     `json:"message"`
+	Time       time.Time  `json:"time"`
+	Status     string     `json:"status,omitempty"`
+	ResolvedAt *time.Time `json:"resolved_at,omitempty"`
 }
 
-// devlogDir returns the path to the ~/.devlog directory.
-func devlogDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("could not resolve home directory: %w", err)
+// isActive reports whether b should appear in standups and `blocker list`.
+// Open blockers stay active until resolved. Blockers saved by older
+// devlog versions have no status; they keep the old 24-hour expiry so that
+// upgrading doesn't resurrect every blocker ever logged.
+func isActive(b Blocker, now time.Time) bool {
+	switch b.Status {
+	case StatusOpen:
+		return true
+	case StatusResolved:
+		return false
+	default:
+		return b.Time.After(now.Add(-24 * time.Hour))
 	}
-	return filepath.Join(home, ".devlog"), nil
 }
 
-// blockersFilePath returns the full path to ~/.devlog/blockers.json.
-func blockersFilePath() (string, error) {
-	dir, err := devlogDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, "blockers.json"), nil
-}
-
-// ensureDevlogDir creates ~/.devlog if it does not exist.
-func ensureDevlogDir() error {
-	dir, err := devlogDir()
-	if err != nil {
-		return err
-	}
-	return os.MkdirAll(dir, 0755)
-}
-
-// loadAll reads all blockers from ~/.devlog/blockers.json.
-// Returns an empty slice if the file does not exist yet.
+// loadAll reads all blockers. Returns an empty slice if none are saved yet.
 func loadAll() ([]Blocker, error) {
-	path, err := blockersFilePath()
-	if err != nil {
+	blockers := []Blocker{}
+	if err := store.Load(FileName, &blockers); err != nil {
 		return nil, err
 	}
-
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return []Blocker{}, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to read blockers file: %w", err)
-	}
-
-	var blockers []Blocker
-	if err := json.Unmarshal(data, &blockers); err != nil {
-		return nil, fmt.Errorf("failed to parse blockers file: %w", err)
-	}
-
 	return blockers, nil
 }
 
-// saveAll writes the full blockers slice to ~/.devlog/blockers.json.
-func saveAll(blockers []Blocker) error {
-	if err := ensureDevlogDir(); err != nil {
-		return err
-	}
-
-	path, err := blockersFilePath()
-	if err != nil {
-		return err
-	}
-
-	data, err := json.MarshalIndent(blockers, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to serialize blockers: %w", err)
-	}
-
-	return os.WriteFile(path, data, 0644)
-}
-
-// AddBlocker appends a new blocker with the current timestamp.
+// AddBlocker appends a new open blocker with the current timestamp.
 func AddBlocker(message string) error {
 	all, err := loadAll()
 	if err != nil {
@@ -94,26 +59,76 @@ func AddBlocker(message string) error {
 	all = append(all, Blocker{
 		Message: message,
 		Time:    time.Now(),
+		Status:  StatusOpen,
 	})
 
-	return saveAll(all)
+	return store.Save(FileName, all)
 }
 
-// GetActiveBlockers returns all blockers saved in the last 24 hours.
-func GetActiveBlockers() ([]Blocker, error) {
-	cutoff := time.Now().Add(-24 * time.Hour)
+// activeIndexes returns the positions in all of the active blockers,
+// oldest first. Its order defines the numbers shown by `blocker list`.
+func activeIndexes(all []Blocker, now time.Time) []int {
+	idx := []int{}
+	for i, b := range all {
+		if isActive(b, now) {
+			idx = append(idx, i)
+		}
+	}
+	return idx
+}
 
+// GetActiveBlockers returns the blockers that are still active, oldest
+// first. Its order matches the numbers used by Resolve.
+func GetActiveBlockers() ([]Blocker, error) {
 	all, err := loadAll()
 	if err != nil {
 		return nil, err
 	}
 
-	filtered := make([]Blocker, 0)
-	for _, b := range all {
-		if b.Time.After(cutoff) {
-			filtered = append(filtered, b)
-		}
+	active := []Blocker{}
+	for _, i := range activeIndexes(all, time.Now()) {
+		active = append(active, all[i])
+	}
+	return active, nil
+}
+
+// Resolve marks the active blockers with the given 1-based numbers (as
+// shown by GetActiveBlockers) as resolved, and returns them. Either all
+// numbers are valid and resolved, or nothing changes.
+func Resolve(numbers []int) ([]Blocker, error) {
+	all, err := loadAll()
+	if err != nil {
+		return nil, err
 	}
 
-	return filtered, nil
+	now := time.Now()
+	active := activeIndexes(all, now)
+
+	seen := map[int]bool{}
+	targets := []int{}
+	for _, n := range numbers {
+		if n < 1 || n > len(active) {
+			if len(active) == 0 {
+				return nil, fmt.Errorf("there are no open blockers")
+			}
+			return nil, fmt.Errorf("no open blocker #%d (valid: 1-%d)", n, len(active))
+		}
+		if !seen[n] {
+			seen[n] = true
+			targets = append(targets, active[n-1])
+		}
+	}
+	sort.Ints(targets)
+
+	resolved := make([]Blocker, 0, len(targets))
+	for _, i := range targets {
+		all[i].Status = StatusResolved
+		all[i].ResolvedAt = &now
+		resolved = append(resolved, all[i])
+	}
+
+	if err := store.Save(FileName, all); err != nil {
+		return nil, err
+	}
+	return resolved, nil
 }
