@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/khurshiduktamov/devlog/internal/activity"
@@ -35,7 +37,12 @@ func runStandup(cmd *cobra.Command, args []string) error {
 	standupAuthor.apply(&opts)
 
 	commits, err := git.GetCommits(opts)
-	if err != nil {
+	switch {
+	case errors.Is(err, git.ErrNotRepository), errors.Is(err, git.ErrGitNotInstalled):
+		// Notes and blockers are still useful without commits.
+		fmt.Fprintf(os.Stderr, "Note: %v — showing notes and blockers only.\n\n", err)
+		commits = nil
+	case err != nil:
 		return fmt.Errorf("failed to fetch commits: %w", err)
 	}
 

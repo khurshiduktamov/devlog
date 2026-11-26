@@ -14,6 +14,13 @@ type Commit struct {
 	Time    time.Time
 }
 
+// ErrNotRepository is returned when the directory is not inside a git
+// work tree.
+var ErrNotRepository = errors.New("not inside a git repository")
+
+// ErrGitNotInstalled is returned when the git executable can't be found.
+var ErrGitNotInstalled = errors.New("git is not installed or not in PATH")
+
 // Options controls which commits GetCommits returns.
 type Options struct {
 	// Dir is the repository to read; empty means the current directory.
@@ -43,8 +50,29 @@ func CurrentUserEmail(dir string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// GetCommits returns commits from the current git repo matching opts.
+// CheckRepo reports ErrGitNotInstalled or ErrNotRepository if git can't
+// be used in dir.
+func CheckRepo(dir string) error {
+	if _, err := exec.LookPath("git"); err != nil {
+		return ErrGitNotInstalled
+	}
+	cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil || strings.TrimSpace(string(out)) != "true" {
+		return ErrNotRepository
+	}
+	return nil
+}
+
+// GetCommits returns commits from the git repo in opts.Dir matching opts.
+// It returns ErrNotRepository or ErrGitNotInstalled when git can't be used
+// there, so callers can degrade gracefully.
 func GetCommits(opts Options) ([]Commit, error) {
+	if err := CheckRepo(opts.Dir); err != nil {
+		return nil, err
+	}
+
 	args := []string{
 		"log",
 		"--since=" + opts.Since.Format(time.RFC3339),

@@ -31,6 +31,9 @@ func (f *authorFlags) apply(opts *git.Options) {
 	case f.author != "":
 		opts.Author = f.author
 	default:
+		if git.CheckRepo(opts.Dir) != nil {
+			return // no repo: GetCommits reports that, no author needed
+		}
 		email := git.CurrentUserEmail(opts.Dir)
 		if email == "" {
 			fmt.Fprintln(os.Stderr,

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,6 +28,9 @@ func runToday(cmd *cobra.Command, args []string) error {
 	todayAuthor.apply(&opts)
 
 	commits, err := git.GetCommits(opts)
+	if errors.Is(err, git.ErrNotRepository) {
+		return fmt.Errorf("%w — run devlog today from inside a project folder", err)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to fetch commits: %w", err)
 	}

@@ -1,6 +1,7 @@
 package git
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -136,5 +137,15 @@ func TestSinceExcludesOlderCommits(t *testing.T) {
 	}
 	if got := messages(cs); len(got) != 1 || got[0] != "new" {
 		t.Fatalf("got %v, want [new]", got)
+	}
+}
+
+func TestNotARepository(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	_, err := GetCommits(Options{Dir: t.TempDir(), Since: time.Now().Add(-time.Hour)})
+	if !errors.Is(err, ErrNotRepository) {
+		t.Fatalf("got %v, want ErrNotRepository", err)
 	}
 }
